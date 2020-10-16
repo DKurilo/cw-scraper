@@ -1,7 +1,7 @@
 module Main where
 
-import Text.HTML.Scalpel
-import WikiScrapeLib
+import           Text.HTML.Scalpel
+import           WikiScrapeLib
 
 
 countries :: [String]
@@ -26,5 +26,4 @@ main :: IO ()
 main = do
      words <- mapM mostfrequentwordonpage (wikify <$> countries)
      let results = zip countries words
-     mapM_ (\x -> putStrLn $ (fst x) ++ ": " ++ ((show.snd) x)) results
-
+     mapM_ (\x -> putStrLn $ fst x ++ ": " ++ (show.snd) x) results

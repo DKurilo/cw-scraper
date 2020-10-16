@@ -22,6 +22,10 @@ dependencies:
 - base >= 4.7 && < 5
 - scalpel
 - split
+- bytestring
+- bytestring-trie
+- containers
+- http-client
 
 library:
   source-dirs: src
