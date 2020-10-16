@@ -6,7 +6,7 @@ module WikiScrapeLib
     ) where
 
 import           Control.Exception               (IOException, catch)
-import           Control.Monad                   ((>=>))
+import           Control.Monad                   ((>=>), join)
 import qualified Data.ByteString                 as BS
 import qualified Data.ByteString.Char8           as BC
 import           Data.Char                       (isAlpha, isNumber,
@@ -90,11 +90,20 @@ type Histogram = M.Map GoodWord Int
 buildHistogram :: [GoodWord] -> Histogram
 buildHistogram = foldl (\h gw -> M.insertWith (+) gw 1 h) M.empty
 
-getMostFrequent :: Histogram -> Maybe GoodWord
-getMostFrequent = fmap fst . listToMaybe . sortOn (\(_, n) -> -n) . M.toAscList
+getSortedWords :: Histogram -> [(GoodWord, Int)]
+getSortedWords = sortOn (\(_, n) -> -n) . M.toAscList
+
+tryGetFirst :: [(a, b)] -> Maybe a
+tryGetFirst = fmap fst . listToMaybe
+
+buildTagCloud :: Maybe [(GoodWord, Int)] -> IO ()
+buildTagCloud Nothing = return ()
+buildTagCloud _ = return ()
 
 mostfrequentwordonpage :: URL -> IO (Maybe String)
 mostfrequentwordonpage page = do
     mbArticle <- catch (getArticle page) (return . const Nothing :: HttpException -> IO (Maybe Article))
     sw <- stopwords
-    return $ show <$> (getMostFrequent . buildHistogram . getWords sw =<< mbArticle)
+    let sortedWords = getSortedWords . buildHistogram . getWords sw <$> mbArticle
+    buildTagCloud sortedWords
+    return $ show <$> join (tryGetFirst <$> sortedWords)
