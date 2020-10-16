@@ -18,7 +18,7 @@ import           Data.Maybe                      (fromJust, isJust, listToMaybe)
 import qualified Data.Trie                       as T
 import           Network.HTTP.Client             (HttpException)
 import           Text.HTML.Scalpel
-import           Text.ParserCombinators.ReadP    as TPR
+import           Text.ParserCombinators.ReadP
 import qualified Text.ParserCombinators.ReadPrec as TP
 import           Text.Read                       (Read (..), readMaybe)
 
@@ -26,51 +26,50 @@ stopwords :: IO (T.Trie Bool)
 stopwords = T.fromList  . map (, True) . BC.words <$> catch (BS.readFile "./stopwords.txt")
                                                             (return . const "" :: IOException -> IO BS.ByteString )
 
-newtype GoodWord = W BS.ByteString
+newtype GoodWord = W BS.ByteString deriving (Eq, Ord)
+
+instance Semigroup GoodWord where
+    (W w1) <> (W w2) = W $ w1 <> w2
 
 instance Read GoodWord where
     readPrec = TP.lift parser
-        where parser :: TPR.ReadP GoodWord
+        where parser :: ReadP GoodWord
               parser = ( do
-                           TPR.munch1 isPunctuation
+                           munch1 isPunctuation
                            parser
                        )
                        <++ ( do
-                           TPR.munch1 isSpace
+                           munch1 isSpace
                            parser
                        )
                        <++ ( do
-                           word <- W . BC.pack . map toLower <$> TPR.munch1 isAlpha
+                           c <- W . BC.singleton . toLower <$> satisfy isAlpha
+                           word <- W . BC.pack . map toLower <$> munch1 isAlpha
                            afterWord
-                           return word
+                           return $ c <> word
                        )
-              afterWord :: TPR.ReadP String
+              afterWord :: ReadP String
               afterWord = ( do
                              satisfy isPunctuation
-                             TPR.munch (const True)
+                             munch (const True)
                           )
-                          <++ TPR.munch (not . isNumber)
+                          <++ munch (not . isNumber)
 
 instance Show GoodWord where
     show (W w) = BC.unpack w
 
-fromGoodWord :: GoodWord -> BS.ByteString
-fromGoodWord (W w) = w
-
 cleanUpWord :: Title -> T.Trie a -> GoodWord -> Maybe GoodWord
-cleanUpWord title sw gw
+cleanUpWord title sw gw@(W w)
   | startsWitTitle = Nothing
   | isStopWord = Nothing
-  | BS.length w <= 1 = Nothing
   | otherwise = Just gw
-  where w = fromGoodWord gw
-        titl = BC.map toLower . BS.take 4 . BC.pack $ title
+  where titl = BC.map toLower . BS.take 4 . BC.pack $ title
         startsWitTitle = titl `BS.isPrefixOf` w
         isStopWord = w `T.member` sw
 
 type Title = String
 type FullText = String
-data Article = Article Title FullText deriving (Show)
+data Article = Article Title FullText
 
 getArticle :: URL -> IO (Maybe Article)
 getArticle url =  scrapeURL url $
@@ -79,23 +78,23 @@ getArticle url =  scrapeURL url $
         body <- text ("div" @: ["id" @= "bodyContent"])
         return (Article title body)
 
-getWords :: T.Trie a -> Article -> [BS.ByteString]
-getWords sw (Article title body) = map (fromGoodWord . fromJust)
+getWords :: T.Trie a -> Article -> [GoodWord]
+getWords sw (Article title body) = map fromJust
                                  . filter isJust
                                  . map (readMaybe >=> cleanUpWord title sw)
                                  . words
                                  $ body
 
-type Histogram = M.Map BS.ByteString Int
+type Histogram = M.Map GoodWord Int
 
-buildHistogram :: [BS.ByteString] -> Histogram
-buildHistogram = foldl (\h w -> M.insertWith (+) w 1 h) M.empty
+buildHistogram :: [GoodWord] -> Histogram
+buildHistogram = foldl (\h gw -> M.insertWith (+) gw 1 h) M.empty
 
-getMostFrequent :: Histogram -> Maybe BS.ByteString
+getMostFrequent :: Histogram -> Maybe GoodWord
 getMostFrequent = fmap fst . listToMaybe . sortOn (\(_, n) -> -n) . M.toAscList
 
 mostfrequentwordonpage :: URL -> IO (Maybe String)
 mostfrequentwordonpage page = do
     mbArticle <- catch (getArticle page) (return . const Nothing :: HttpException -> IO (Maybe Article))
     sw <- stopwords
-    return $ BC.unpack <$> (getMostFrequent . buildHistogram . getWords sw =<< mbArticle)
+    return $ show <$> (getMostFrequent . buildHistogram . getWords sw =<< mbArticle)
