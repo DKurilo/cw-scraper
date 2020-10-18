@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: c51f4489924d1eef8d26b741e705a078c4d1cc397c8e9c0e5e7775d0396a95b9
+-- hash: 640462cb2ea4bfe366df1dd996a1f41603cbb8e9e775b353892d5bc6536d8001
 
 name:           cw-scraper
 version:        0.1.0.0
@@ -35,7 +35,10 @@ library
     , bytestring
     , bytestring-trie
     , containers
+    , gd
     , http-client
+    , lens
+    , random
     , scalpel
     , split
   default-language: Haskell2010
@@ -53,7 +56,10 @@ executable cw-scraper-exe
     , bytestring-trie
     , containers
     , cw-scraper
+    , gd
     , http-client
+    , lens
+    , random
     , scalpel
     , split
   default-language: Haskell2010
@@ -72,7 +78,10 @@ test-suite cw-scraper-test
     , bytestring-trie
     , containers
     , cw-scraper
+    , gd
     , http-client
+    , lens
+    , random
     , scalpel
     , split
     , tasty

@@ -26,6 +26,9 @@ dependencies:
 - bytestring-trie
 - containers
 - http-client
+- gd
+- lens
+- random
 
 library:
   source-dirs: src
