@@ -127,23 +127,47 @@ stringSize w = do
 
 initCenter :: DrawnWord -> IO DrawnWord
 initCenter w = do
-    x <- randomRIO (-150, 150)
+    x <- randomRIO (-200, 200)
     return $ w & dwCenter .~ (x, 0)
 
 setCenters :: [DrawnWord] -> [DrawnWord]
-setCenters ws = ws
+setCenters ws = go ws []
+    where go [] ws'' = ws''
+          go (w:ws') ws''
+            | null newWs = go ws' ws''
+            | otherwise = go ws' (head newWs : ws'')
+            where x0 = w ^. dwCenter . _1 . to fromIntegral
+                  y0 = w ^. dwCenter . _2 . to fromIntegral
+                  r = sqrt (x0 * x0 + y0 * y0)
+                  steps = 360
+                  getXY (r', z) = (round (r' * cos angle), round (- r' * sin angle * 2 / 3))
+                    where angle = z * 2 * pi / steps
+                  getBox w' = ((minX, minY), (maxX, maxY))
+                    where minX = (w' ^. dwCenter . _1) - ((w' ^. dwSize . _1) `div` 2)
+                          maxX = (w' ^. dwCenter . _1) + ((w' ^. dwSize . _1) `div` 2)
+                          minY = (w' ^. dwCenter . _2) - ((w' ^. dwSize . _2) `div` 2)
+                          maxY = (w' ^. dwCenter . _2) + ((w' ^. dwSize . _2) `div` 2)
+                  are1DOvelapped (b1minX, b1maxX) (b2minX, b2maxX) = b1maxX >= b2minX - 10 && b2maxX >= b1minX - 10
+                  are2DOverlappeded w1 w2 = are1DOvelapped (w1minX, w1maxX) (w2minX, w2maxX)
+                                          && are1DOvelapped (w1minY, w1maxY) (w2minY, w2maxY)
+                      where ((w1minX, w1minY), (w1maxX, w1maxY)) = getBox w1
+                            ((w2minX, w2minY), (w2maxX, w2maxY)) = getBox w2
+                  isOverlappedWithAny w' = any (are2DOverlappeded w') ws''
+                  newWs = filter (not . isOverlappedWithAny)
+                          . map (\polar -> w & dwCenter .~ getXY polar)
+                          $ [(r', angle) | r' <- [r, r + 8..], angle <- [0..steps]]
 
 calculateOrigins :: [DrawnWord] -> ([DrawnWord], G.Size)
-calculateOrigins ws = (map setOrigin ws, (maxX + dx + 20, maxY + dy + 20))
-    where minX = minimum . map (\w -> (w ^. dwCenter . _1) - (w ^. dwSize . _1) `div` 2) $ ws
-          maxX = maximum . map (\w -> (w ^. dwCenter . _1) + (w ^. dwSize . _1) `div` 2) $ ws
-          minY = minimum . map (\w -> (w ^. dwCenter . _2) - (w ^. dwSize . _2) `div` 2) $ ws
-          maxY = maximum . map (\w -> (w ^. dwCenter . _2) + (w ^. dwSize . _2) `div` 2) $ ws
-          dx = 20 - minX
-          dy = 20 - minY
+calculateOrigins ws = (map setOrigin ws, (maxX + dx + 40, maxY + dy + 40))
+    where minX = minimum . map (\w -> (w ^. dwCenter . _1) - ((w ^. dwSize . _1) `div` 2)) $ ws
+          maxX = maximum . map (\w -> (w ^. dwCenter . _1) + ((w ^. dwSize . _1) `div` 2)) $ ws
+          minY = minimum . map (\w -> (w ^. dwCenter . _2) - ((w ^. dwSize . _2) `div` 2)) $ ws
+          maxY = maximum . map (\w -> (w ^. dwCenter . _2) + ((w ^. dwSize . _2) `div` 2)) $ ws
+          dx = 40 - minX
+          dy = 40 - minY
           setOrigin w = w & dwOrigin .~ (x, y)
-              where x = dx + (w ^. dwCenter . _1) - (w ^. dwSize . _1) `div` 2
-                    y = dy + (w ^. dwCenter . _2) - (w ^. dwSize . _2) `div` 2
+              where x = dx + (w ^. dwCenter . _1) - ((w ^. dwSize . _1) `div` 2)
+                    y = dy + (w ^. dwCenter . _2) + ((w ^. dwSize . _2) `div` 2)
 
 drawWord :: G.Image -> DrawnWord -> IO (G.Point, G.Point, G.Point, G.Point)
 drawWord im w = G.drawString font (w ^. dwFontSize) 0 (w ^. dwOrigin) (w ^. dwWord . to show) (w ^. dwColor) im
@@ -151,9 +175,9 @@ drawWord im w = G.drawString font (w ^. dwFontSize) 0 (w ^. dwOrigin) (w ^. dwWo
 buildTagCloud :: String -> Maybe [(GoodWord, Int)] -> IO ()
 buildTagCloud _ Nothing = return ()
 buildTagCloud fn (Just h) = do
-    let first20 = take 20 h
-        minSize = 8
-        maxSize = 20
+    let first20 = take 40 h
+        minSize = 40
+        maxSize = 100
         minN = (fromIntegral . snd . last) first20
         maxN = (fromIntegral . snd . head) first20
         getPt n
@@ -161,8 +185,8 @@ buildTagCloud fn (Just h) = do
           | otherwise = ((maxSize - minSize) * n' + minSize * maxN - maxSize * minN) / (maxN - minN)
           where n' = fromIntegral n
         color pt
-          | pt >= 16 = G.rgb 255 0 0
-          | pt >= 12 = G.rgb 0 255 0
+          | pt >= 80 = G.rgb 255 0 0
+          | pt >= 60 = G.rgb 0 255 0
           | otherwise = G.rgb 0 0 255
     words <- mapM ((initCenter >=> stringSize) . (\(gw, n) -> let pt = getPt n in  DW gw pt (color pt) (0, 0) (0, 0) (0, 0))) first20
     let (words', isize) = (calculateOrigins . setCenters) words
