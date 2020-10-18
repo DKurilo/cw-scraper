@@ -196,15 +196,14 @@ buildWordCloud fn (Just h) = do
           | otherwise = ((maxSize - minSize) * n' + minSize * maxN - maxSize * minN) / (maxN - minN)
           where n' = fromIntegral n
         color pt
-          | pt >= 88 = htmlColor "201b1b"
-          | pt >= 76 = htmlColor "380606"
-          | pt >= 64 = htmlColor "5a0b0b"
-          | pt >= 52 = htmlColor "7a0e0e"
-          | otherwise = htmlColor "d3af8e"
+          | pt >= 85 = htmlColor "e70303"
+          | pt >= 70 = htmlColor "c90404"
+          | pt >= 55 = htmlColor "a50606"
+          | otherwise = htmlColor "870202"
     words <- mapM ((initCenter >=> stringSize) . (\(gw, n) -> let pt = getPt n in  DW gw pt (color pt) (0, 0) (0, 0) (0, 0))) firstWords
     let (words', isize) = (calculateOrigins . setCenters) words
     image <- G.newImage isize
-    G.fillImage (G.rgb 255 255 255) image
+    G.fillImage (htmlColor "000000") image
     mapM_ (drawWord image) words'
     G.savePngFile ("./generated-images/" <> fn <> ".png") image
 
