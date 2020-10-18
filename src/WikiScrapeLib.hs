@@ -26,15 +26,18 @@ import           Text.ParserCombinators.ReadP
 import qualified Text.ParserCombinators.ReadPrec as TP
 import           Text.Read                       (Read (..), readMaybe)
 
-font :: String
-font = "./fonts/Anton-Regular.ttf"
+-- some settings
+font = "./fonts/Underdog-Regular.ttf"
 borders = 40
 paddings = 10
+wordsInCloud = 50
 
+-- stop words initialization
 stopwords :: IO (T.Trie Bool)
 stopwords = T.fromList  . map (, True) . BC.words <$> catch (BS.readFile "./stopwords.txt")
                                                             (return . const "" :: IOException -> IO BS.ByteString )
 
+-- most frequent word
 newtype GoodWord = W BS.ByteString deriving (Eq, Ord)
 
 instance Semigroup GoodWord where
@@ -73,7 +76,7 @@ cleanUpWord title sw gw@(W w)
   | isStopWord = Nothing
   | otherwise = Just gw
   where titl = BC.map toLower . BS.take 4 . BC.pack $ title
-        startsWitTitle = titl `BS.isPrefixOf` w
+        startsWitTitle = titl `BS.isPrefixOf` w || w `BS.isPrefixOf` titl
         isStopWord = w `T.member` sw
 
 type Title = String
@@ -107,6 +110,7 @@ getSortedWords = sortOn (\(_, n) -> -n) . M.toAscList
 tryGetFirst :: [(a, b)] -> Maybe a
 tryGetFirst = fmap fst . listToMaybe
 
+-- Word cloud building
 data DrawnWord = DW { _dwWord     :: GoodWord
                     , _dwFontSize :: Double
                     , _dwColor    :: G.Color
@@ -129,7 +133,7 @@ stringSize w = do
 
 initCenter :: DrawnWord -> IO DrawnWord
 initCenter w = do
-    x <- randomRIO (-200, 200)
+    x <- randomRIO (-300, 300)
     return $ w & dwCenter .~ (x, 0)
 
 setCenters :: [DrawnWord] -> [DrawnWord]
@@ -174,34 +178,42 @@ calculateOrigins ws = (map setOrigin ws, (maxX + dx + borders, maxY + dy + borde
 drawWord :: G.Image -> DrawnWord -> IO (G.Point, G.Point, G.Point, G.Point)
 drawWord im w = G.drawString font (w ^. dwFontSize) 0 (w ^. dwOrigin) (w ^. dwWord . to show) (w ^. dwColor) im
 
-buildTagCloud :: String -> Maybe [(GoodWord, Int)] -> IO ()
-buildTagCloud _ Nothing = return ()
-buildTagCloud fn (Just h) = do
-    let first20 = take 40 h
+htmlColor :: String -> G.Color
+htmlColor [r1, r2, g1, g2, b1, b2] = G.rgb (getInt r1 r2) (getInt g1 g2) (getInt b1 b2)
+    where getInt c1 c2 = read ("0x" <> [c1, c2])
+htmlColor _ = G.rgb 0 0 0
+
+buildWordCloud :: String -> Maybe [(GoodWord, Int)] -> IO ()
+buildWordCloud _ Nothing = return ()
+buildWordCloud fn (Just h) = do
+    let firstWords = take wordsInCloud h
         minSize = 40
         maxSize = 100
-        minN = (fromIntegral . snd . last) first20
-        maxN = (fromIntegral . snd . head) first20
+        minN = (fromIntegral . snd . last) firstWords
+        maxN = (fromIntegral . snd . head) firstWords
         getPt n
           | minN == maxN = maxSize
           | otherwise = ((maxSize - minSize) * n' + minSize * maxN - maxSize * minN) / (maxN - minN)
           where n' = fromIntegral n
         color pt
-          | pt >= 80 = G.rgb 255 0 0
-          | pt >= 60 = G.rgb 0 255 0
-          | otherwise = G.rgb 0 0 255
-    words <- mapM ((initCenter >=> stringSize) . (\(gw, n) -> let pt = getPt n in  DW gw pt (color pt) (0, 0) (0, 0) (0, 0))) first20
+          | pt >= 88 = htmlColor "201b1b"
+          | pt >= 76 = htmlColor "380606"
+          | pt >= 64 = htmlColor "5a0b0b"
+          | pt >= 52 = htmlColor "7a0e0e"
+          | otherwise = htmlColor "d3af8e"
+    words <- mapM ((initCenter >=> stringSize) . (\(gw, n) -> let pt = getPt n in  DW gw pt (color pt) (0, 0) (0, 0) (0, 0))) firstWords
     let (words', isize) = (calculateOrigins . setCenters) words
     image <- G.newImage isize
     G.fillImage (G.rgb 255 255 255) image
     mapM_ (drawWord image) words'
     G.savePngFile ("./generated-images/" <> fn <> ".png") image
 
+-- main doer
 mostfrequentwordonpage :: URL -> IO (Maybe String)
 mostfrequentwordonpage page = do
     mbArticle <- catch (getArticle page) (return . const Nothing :: HttpException -> IO (Maybe Article))
     sw <- stopwords
     let sortedWords = getSortedWords . buildHistogram . getWords sw <$> mbArticle
-    let tagCloudFileName = maybe "unknown" aTitle mbArticle
-    buildTagCloud tagCloudFileName sortedWords
+    let wordCloudFileName = maybe "unknown" aTitle mbArticle
+    buildWordCloud wordCloudFileName sortedWords
     return $ show <$> (tryGetFirst =<< sortedWords)
