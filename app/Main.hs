@@ -6,6 +6,8 @@ import           WikiScrapeLib
 
 countries :: [String]
 countries = [
+          "Haskell_(programming_language)",
+          "Halloween",
           "Scotland",
           "England",
           "United_Kingdom",
