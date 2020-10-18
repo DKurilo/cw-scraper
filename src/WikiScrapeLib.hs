@@ -28,6 +28,8 @@ import           Text.Read                       (Read (..), readMaybe)
 
 font :: String
 font = "./fonts/Anton-Regular.ttf"
+borders = 40
+paddings = 10
 
 stopwords :: IO (T.Trie Bool)
 stopwords = T.fromList  . map (, True) . BC.words <$> catch (BS.readFile "./stopwords.txt")
@@ -147,7 +149,7 @@ setCenters ws = go ws []
                           maxX = (w' ^. dwCenter . _1) + ((w' ^. dwSize . _1) `div` 2)
                           minY = (w' ^. dwCenter . _2) - ((w' ^. dwSize . _2) `div` 2)
                           maxY = (w' ^. dwCenter . _2) + ((w' ^. dwSize . _2) `div` 2)
-                  are1DOvelapped (b1minX, b1maxX) (b2minX, b2maxX) = b1maxX >= b2minX - 10 && b2maxX >= b1minX - 10
+                  are1DOvelapped (b1minX, b1maxX) (b2minX, b2maxX) = b1maxX >= b2minX - paddings && b2maxX >= b1minX - paddings
                   are2DOverlappeded w1 w2 = are1DOvelapped (w1minX, w1maxX) (w2minX, w2maxX)
                                           && are1DOvelapped (w1minY, w1maxY) (w2minY, w2maxY)
                       where ((w1minX, w1minY), (w1maxX, w1maxY)) = getBox w1
@@ -158,13 +160,13 @@ setCenters ws = go ws []
                           $ [(r', angle) | r' <- [r, r + 8..], angle <- [0..steps]]
 
 calculateOrigins :: [DrawnWord] -> ([DrawnWord], G.Size)
-calculateOrigins ws = (map setOrigin ws, (maxX + dx + 40, maxY + dy + 40))
+calculateOrigins ws = (map setOrigin ws, (maxX + dx + borders, maxY + dy + borders))
     where minX = minimum . map (\w -> (w ^. dwCenter . _1) - ((w ^. dwSize . _1) `div` 2)) $ ws
           maxX = maximum . map (\w -> (w ^. dwCenter . _1) + ((w ^. dwSize . _1) `div` 2)) $ ws
           minY = minimum . map (\w -> (w ^. dwCenter . _2) - ((w ^. dwSize . _2) `div` 2)) $ ws
           maxY = maximum . map (\w -> (w ^. dwCenter . _2) + ((w ^. dwSize . _2) `div` 2)) $ ws
-          dx = 40 - minX
-          dy = 40 - minY
+          dx = borders - minX
+          dy = borders - minY
           setOrigin w = w & dwOrigin .~ (x, y)
               where x = dx + (w ^. dwCenter . _1) - ((w ^. dwSize . _1) `div` 2)
                     y = dy + (w ^. dwCenter . _2) + ((w ^. dwSize . _2) `div` 2)
@@ -193,7 +195,7 @@ buildTagCloud fn (Just h) = do
     image <- G.newImage isize
     G.fillImage (G.rgb 255 255 255) image
     mapM_ (drawWord image) words'
-    G.savePngFile ("./" <> fn <> ".png") image
+    G.savePngFile ("./generated-images/" <> fn <> ".png") image
 
 mostfrequentwordonpage :: URL -> IO (Maybe String)
 mostfrequentwordonpage page = do
